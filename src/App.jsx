@@ -1,4 +1,4 @@
-// src/App.jsx
+// src/App.jsx - Updated with new routes
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
@@ -12,8 +12,15 @@ import About from './pages/About';
 import FAQ from './pages/FAQ';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import CreateCampaign from './pages/CreateCampaign';
-import CampaignDisplay from './pages/CampaignDisplay';  // Add this import
+import CampaignDisplay from './pages/CampaignDisplay';
 import NotFound from './pages/NotFound';
+
+// New Pages
+import Profile from './pages/Profile';
+import MyCampaigns from './pages/MyCampaigns';
+import EditCampaign from './pages/EditCampaign';
+import PaymentPage from './pages/PaymentPage';
+import PaymentVerification from './pages/PaymentVerification';
 
 // Protected Route Component
 import ProtectedRoute from './components/ProtectedRoute';
@@ -30,7 +37,7 @@ function App() {
           <Route path="/about" element={<About />} />
           <Route path="/faq" element={<FAQ />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-          <Route path="/campaign/:id" element={<CampaignDisplay />} />  {/* Add this route */}
+          <Route path="/campaign/:id" element={<CampaignDisplay />} />
           
           {/* Special Case - Dashboard is public but shows different content based on auth */}
           <Route path="/dashboard" element={
@@ -45,14 +52,35 @@ function App() {
               <CreateCampaign />
             </ProtectedRoute>
           } />
+          
+          {/* New Protected Routes */}
           <Route path="/profile" element={
             <ProtectedRoute>
-              <div>Profile Page</div>
+              <Profile />
             </ProtectedRoute>
           } />
+          
           <Route path="/my-campaigns" element={
             <ProtectedRoute>
-              <div>My Campaigns Page</div>
+              <MyCampaigns />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/edit-campaign/:id" element={
+            <ProtectedRoute>
+              <EditCampaign />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/payment/:campaignId" element={
+            <ProtectedRoute>
+              <PaymentPage />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/payment/verify/:paymentId" element={
+            <ProtectedRoute>
+              <PaymentVerification />
             </ProtectedRoute>
           } />
           

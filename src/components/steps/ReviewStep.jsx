@@ -1,14 +1,19 @@
+// src/components/steps/ReviewStep.jsx
 import React, { useState } from 'react';
-import { Check, ChevronLeft, AlertTriangle, UserCircle } from 'lucide-react';
-import { CustomNav } from '../../hooks/CustomNavigation';
+import { Check, ChevronLeft, AlertTriangle, UserCircle, Save } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { checkAndCleanupStorage } from '../../utils/storageUtils';
+import campaignService from '../../services/campaignService';
+import { checkAndCleanBeforeOperation } from '../../utils/storageUtils';
+import { processCampaignImages } from '../../utils/imageOptimizer';
 
 const ReviewStep = ({ formData, setFormData, onPrev }) => {
-  const navigate = CustomNav();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState(null);
+  const [warning, setWarning] = useState(null);
 
   const validateFormData = () => {
     const requiredFields = {
@@ -39,49 +44,102 @@ const ReviewStep = ({ formData, setFormData, onPrev }) => {
     }
   };
 
+  // Function to save campaign as a draft
+  const saveDraft = async () => {
+    try {
+      setSavingDraft(true);
+      setError(null);
+      setWarning(null);
+      
+      // First check and clean localStorage if needed
+      await checkAndCleanBeforeOperation();
+      
+      // Prepare campaign data with draft status
+      const draftData = {
+        ...formData,
+        status: 'draft'
+      };
+      
+      // Optimize images before saving
+      try {
+        setWarning("Processing images... This may take a moment.");
+        const optimizedData = await processCampaignImages(draftData);
+        
+        // Create the campaign with draft status
+        const result = await campaignService.createCampaign(optimizedData, user?.id);
+        console.log('Draft saved successfully:', result);
+        
+        // Navigate to dashboard after saving
+        navigate('/dashboard');
+      } catch (optimizationError) {
+        console.error('Error optimizing images:', optimizationError);
+        
+        // Try with unoptimized data as fallback
+        const result = await campaignService.createCampaign(draftData, user?.id);
+        console.log('Draft saved successfully (without optimization):', result);
+        navigate('/dashboard');
+      }
+    } catch (err) {
+      console.error('Error saving draft:', err);
+      setError(`Failed to save draft: ${err.message || 'Please try reducing image sizes'}`);
+    } finally {
+      setSavingDraft(false);
+      setWarning(null);
+    }
+  };
+
+  // Function to handle campaign submission
   const handleSubmit = async () => {
     try {
       setSubmitting(true);
       setError(null);
-
-      // Check and cleanup storage if needed
-      const storageReady = await checkAndCleanupStorage();
-      if (!storageReady) {
-        throw new Error('Unable to free up storage space. Please try removing some old campaigns first.');
-      }
-
+      setWarning(null);
+      
       // Validate form data
       validateFormData();
-
-      // Create campaign data structure
-      const newCampaign = {
-        id: Date.now().toString(),
-        ...formData,
-        currentAmount: 0,
-        status: 'active',
-        creator: {
-          id: user?.id || 'anonymous',
-          name: user?.fullName || 'Anonymous',
-          avatar: null,
-          totalCampaigns: 1,
-          successRate: 100
-        },
-        createdAt: new Date().toISOString(),
-        endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
-      };
-
-      // Save to localStorage
-      const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
-      campaigns.push(newCampaign);
-      localStorage.setItem('campaigns', JSON.stringify(campaigns));
-
-      // Navigate to dashboard after successful submission
-      navigate('/dashboard');
+      
+      // First check and clean localStorage if needed
+      await checkAndCleanBeforeOperation();
+      
+      // Try to optimize all images first
+      try {
+        setWarning("Processing images... This may take a moment for high-resolution images.");
+        const optimizedData = await processCampaignImages(formData);
+        setFormData(optimizedData); // Update the form data with optimized images
+        
+        // Create the campaign
+        const result = await campaignService.createCampaign(optimizedData, user?.id);
+        console.log('Campaign created successfully:', result);
+        
+        // Navigate to dashboard after successful submission
+        navigate('/dashboard');
+      } catch (createError) {
+        // Handle errors
+        console.error('Error creating campaign:', createError);
+        
+        // Check if error is related to file size
+        if (createError.message && (
+            createError.message.includes('payload size exceeds') || 
+            createError.message.includes('quota exceeded') ||
+            createError.message.includes('Storage quota'))) {
+          
+          // Show specific error for storage issues
+          setError('Your campaign contains images that are too large. Please:' +
+            '\n1. Go back and use smaller images' +
+            '\n2. Reduce the number of images' +
+            '\n3. Save as a draft first, then publish later');
+            
+          setWarning('Tip: Images should ideally be under 200KB each. Consider using an image optimizer before uploading.');
+        } else {
+          setError(`Failed to create campaign: ${createError.message}`);
+        }
+      }
     } catch (err) {
+      console.error('Error in campaign submission process:', err);
       setError(err.message || 'Failed to create campaign. Please try again.');
-      console.error('Error creating campaign:', err);
     } finally {
       setSubmitting(false);
+      setWarning(null);
     }
   };
 
@@ -99,8 +157,20 @@ const ReviewStep = ({ formData, setFormData, onPrev }) => {
     <div className="space-y-8">
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start space-x-3">
-          <AlertTriangle className="h-5 w-5 text-red-400 mt-0.5" />
-          <p className="text-sm text-red-600">{error}</p>
+          <AlertTriangle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm text-red-600">{error}</p>
+            {warning && (
+              <p className="mt-2 text-xs text-red-500">{warning}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {!error && warning && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start space-x-3">
+          <AlertTriangle className="h-5 w-5 text-yellow-400 mt-0.5" />
+          <p className="text-sm text-yellow-700">{warning}</p>
         </div>
       )}
 
@@ -136,6 +206,35 @@ const ReviewStep = ({ formData, setFormData, onPrev }) => {
             <p className="text-sm text-gray-900">{formData.description}</p>
           </div>
         </div>
+        
+        {/* Pitch Asset Preview */}
+        {formData.pitchAsset && (
+          <div className="mt-6 border-t border-gray-200 pt-6">
+            <h4 className="font-medium text-gray-700 mb-2">Pitch Asset</h4>
+            <div className="mt-2">
+              {formData.pitchAsset.type === 'image' ? (
+                <div className="max-w-md mx-auto">
+                  <img 
+                    src={formData.pitchAsset.preview} 
+                    alt="Pitch Asset"
+                    className="rounded-lg border border-gray-300"
+                  />
+                </div>
+              ) : (
+                <div className="max-w-md mx-auto">
+                  <video 
+                    src={formData.pitchAsset.preview} 
+                    controls
+                    className="rounded-lg border border-gray-300 w-full"
+                  />
+                </div>
+              )}
+              <p className="text-xs text-gray-500 text-center mt-2">
+                {formData.pitchAsset.type === 'image' ? 'Image' : 'Video'} pitch asset
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Problem & Solution Review */}
@@ -285,26 +384,51 @@ const ReviewStep = ({ formData, setFormData, onPrev }) => {
           <span>Previous</span>
         </button>
 
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={submitting}
-          className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 
-                   transition-colors flex items-center space-x-2 disabled:opacity-50 
-                   disabled:cursor-not-allowed"
-        >
-          {submitting ? (
-            <>
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
-              <span>Submitting...</span>
-            </>
-          ) : (
-            <>
-              <Check className="h-5 w-5" />
-              <span>Launch Campaign</span>
-            </>
-          )}
-        </button>
+        <div className="space-x-4">
+          {/* Save as Draft Button */}
+          <button
+            type="button"
+            onClick={saveDraft}
+            disabled={savingDraft || submitting}
+            className="px-6 py-3 border border-gray-300 bg-white rounded-lg text-gray-700 
+                     hover:bg-gray-50 transition-colors flex items-center space-x-2 
+                     disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {savingDraft ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-600 border-t-transparent" />
+                <span>Saving Draft...</span>
+              </>
+            ) : (
+              <>
+                <Save className="h-5 w-5" />
+                <span>Save as Draft</span>
+              </>
+            )}
+          </button>
+
+          {/* Launch Campaign Button */}
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting || savingDraft}
+            className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 
+                     transition-colors flex items-center space-x-2 disabled:opacity-50 
+                     disabled:cursor-not-allowed"
+          >
+            {submitting ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+                <span>Submitting...</span>
+              </>
+            ) : (
+              <>
+                <Check className="h-5 w-5" />
+                <span>Launch Campaign</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

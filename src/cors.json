@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["http://localhost:5173", "https://darb-6ba2b.web.app", "https://darb-6ba2b.firebaseapp.com"],
+    "method": ["GET", "POST", "PUT", "DELETE", "HEAD"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": ["Content-Type", "Content-Length", "Content-Encoding", "Content-Disposition"]
+  }
+]

@@ -85,7 +85,7 @@ const About = () => {
                 <resource.icon className="h-8 w-8 text-green-700 mb-4" />
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">{resource.title}</h3>
                 <p className="text-gray-600">{resource.description}</p>
-                <button className="mt-4 flex items-center text-green-700 hover:text-green-800">
+                <button className="mt-4 flex items-center text-purple-700 hover:text-purple-800">
                   Learn more <ArrowRight className="ml-2 h-4 w-4" />
                 </button>
               </div>
@@ -107,7 +107,7 @@ const About = () => {
             <Mail className="h-8 w-8 text-green-700 mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Email Us</h3>
             <p className="text-gray-600 mb-4">For general inquiries:</p>
-            <a href="mailto:info@example.com" className="text-green-700 hover:text-green-800">
+            <a href="mailto:info@example.com" className="text-purple-700 hover:text-purple-800">
               info@example.com
             </a>
           </div>
@@ -115,7 +115,7 @@ const About = () => {
             <Phone className="h-8 w-8 text-green-700 mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Call Us</h3>
             <p className="text-gray-600 mb-4">Support available 24/7:</p>
-            <a href="tel:+15551234567" className="text-green-700 hover:text-green-800">
+            <a href="tel:+15551234567" className="text-purple-700 hover:text-purple-800">
               +1 (555) 123-4567
             </a>
           </div>

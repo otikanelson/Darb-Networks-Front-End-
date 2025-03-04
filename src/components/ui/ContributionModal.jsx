@@ -1,9 +1,17 @@
+// src/components/ui/ContributionModal.jsx
 import React, { useState } from 'react';
 import { X, DollarSign, ChevronRight } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { campaignService } from '../../Services/campaignService';
 
 const ContributionModal = ({ isOpen, onClose, campaign }) => {
+  const { user, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const [selectedMilestones, setSelectedMilestones] = useState([]);
   const [totalAmount, setTotalAmount] = useState(0);
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
@@ -31,56 +39,72 @@ const ContributionModal = ({ isOpen, onClose, campaign }) => {
     }).format(amount);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!isAuthenticated()) {
+      setError('You must be logged in to contribute');
+      return;
+    }
+
+    if (selectedMilestones.length === 0) {
+      setError('Please select at least one milestone to fund');
+      return;
+    }
+
     try {
-      // Get all campaigns
-      const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+      setIsSubmitting(true);
+      setError('');
       
-      // Find the current campaign
-      const campaignIndex = campaigns.findIndex(c => c.id === campaign.id);
-      if (campaignIndex === -1) {
-        throw new Error('Campaign not found');
+      // First try to contribute using Firestore
+      try {
+        console.log('Processing contribution through Firestore...');
+        
+        // Direct contribution (if it's a small amount or test)
+        // In a real app, you would use the payment processing before completing this
+        await campaignService.contributeToCampaign(
+          campaign.id, 
+          totalAmount, 
+          user.id, 
+          selectedMilestones
+        );
+        
+        // Close the modal
+        onClose();
+        
+        // Show success message
+        alert('Contribution successful! Thank you for your support.');
+        
+        // Refresh the page to show updated campaign stats
+        window.location.reload();
+      } catch (firestoreError) {
+        console.error('Failed to process contribution in Firestore:', firestoreError);
+        
+        // Fall back to payment page/redirect
+        // Close the modal
+        onClose();
+        
+        // Navigate to payment page
+        console.log('Redirecting to payment page with:', {
+          campaignId: campaign.id,
+          milestones: selectedMilestones,
+          amount: totalAmount
+        });
+        
+        // Use setTimeout to ensure the modal has time to close before navigation
+        setTimeout(() => {
+          navigate(`/payment/${campaign.id}`, {
+            state: {
+              milestones: [...selectedMilestones],
+              amount: totalAmount
+            },
+            replace: false
+          });
+        }, 100);
       }
-
-      // Update campaign's current amount
-      const contribution = selectedMilestones.reduce((sum, milestone) => sum + Number(milestone.amount), 0);
-      campaigns[campaignIndex] = {
-        ...campaigns[campaignIndex],
-        currentAmount: (Number(campaigns[campaignIndex].currentAmount) || 0) + contribution
-      };
-
-      // Save updated campaigns back to localStorage
-      localStorage.setItem('campaigns', JSON.stringify(campaigns));
-
-      // Record the contribution in a new contributions array
-      const contributions = JSON.parse(localStorage.getItem('contributions') || '[]');
-      const newContribution = {
-        id: Date.now().toString(),
-        campaignId: campaign.id,
-        amount: contribution,
-        milestones: selectedMilestones.map(m => ({
-          id: m.id,
-          title: m.title,
-          amount: m.amount
-        })),
-        date: new Date().toISOString(),
-        investor: {
-          id: 'anonymous', // Replace with actual user ID when auth is implemented
-          name: 'Anonymous Investor' // Replace with actual user name
-        }
-      };
-      contributions.push(newContribution);
-      localStorage.setItem('contributions', JSON.stringify(contributions));
-
-      // Show success message
-      alert(`Successfully contributed ${formatCurrency(contribution)} to the campaign!`);
-      onClose();
-      
-      // Refresh the page to show updated amounts
-      window.location.reload();
     } catch (error) {
       console.error('Error processing contribution:', error);
-      alert('Failed to process contribution. Please try again.');
+      setError('Failed to process contribution. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -109,6 +133,12 @@ const ContributionModal = ({ isOpen, onClose, campaign }) => {
 
         {/* Content */}
         <div className="p-6 max-h-[calc(100vh-250px)] overflow-y-auto">
+          {error && (
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
+              {error}
+            </div>
+          )}
+          
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">
@@ -167,14 +197,23 @@ const ContributionModal = ({ isOpen, onClose, campaign }) => {
             </div>
             <button
               onClick={handleSubmit}
-              disabled={selectedMilestones.length === 0}
+              disabled={selectedMilestones.length === 0 || isSubmitting}
               className="flex items-center px-6 py-3 bg-purple-600 text-white rounded-lg
                        hover:bg-purple-700 transition-colors disabled:opacity-50
                        disabled:cursor-not-allowed"
             >
-              <DollarSign className="h-5 w-5 mr-2" />
-              <span>Continue to Payment</span>
-              <ChevronRight className="h-5 w-5 ml-2" />
+              {isSubmitting ? (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                  Processing...
+                </div>
+              ) : (
+                <>
+                  <DollarSign className="h-5 w-5 mr-2" />
+                  <span>Continue to Payment</span>
+                  <ChevronRight className="h-5 w-5 ml-2" />
+                </>
+              )}
             </button>
           </div>
         </div>

@@ -2,55 +2,86 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import CampaignCard from '../ui/CampaignCard';
-import { 
-  getViewedCampaigns, 
-  getFavoriteCampaigns, 
-  getCreatedCampaigns,
-  getFundedCampaigns
-} from '../../services/campaignService';
+import { campaignService } from '../../services/campaignService';
+import { CustomNav } from '../../hooks/CustomNavigation';
 
 const UserCampaignsSection = () => {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [viewedCampaigns, setViewedCampaigns] = useState([]);
   const [favoriteCampaigns, setFavoriteCampaigns] = useState([]);
   const [userCampaigns, setUserCampaigns] = useState([]);
   const [activeTab, setActiveTab] = useState('viewed');
+  const [loading, setLoading] = useState(true);
+  const navigate = CustomNav();
 
   useEffect(() => {
-    if (user) {
-      loadCampaigns();
-    }
-  }, [user]);
+    loadCampaigns();
+  }, [user, isAuthenticated]);
 
   const loadCampaigns = async () => {
-    const allCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
-    
-    // Get viewed campaign IDs
-    const viewedIds = getViewedCampaigns(user.id);
-    const viewed = allCampaigns.filter(camp => viewedIds.includes(camp.id));
-    setViewedCampaigns(viewed);
+    try {
+      setLoading(true);
+      console.log('Loading campaigns for UserCampaignsSection');
+      
+      // Always load viewed campaigns (works for both authenticated and unauthenticated users)
+      const viewed = await campaignService.getViewedCampaigns(isAuthenticated() ? user?.id : null);
+      console.log(`Loaded ${viewed.length} viewed campaigns`);
+      setViewedCampaigns(viewed);
 
-    // Get favorite campaign IDs
-    const favoriteIds = getFavoriteCampaigns(user.id);
-    const favorites = allCampaigns.filter(camp => favoriteIds.includes(camp.id));
-    setFavoriteCampaigns(favorites);
+      // Load other sections only if user is authenticated
+      if (isAuthenticated() && user) {
+        // Get favorite campaigns
+        const favorites = await campaignService.getFavoriteCampaigns(user.id);
+        console.log(`Loaded ${favorites.length} favorite campaigns`);
+        setFavoriteCampaigns(favorites);
 
-    // Get user-specific campaigns
-    if (user.userType === 'startup') {
-      const created = getCreatedCampaigns(user.id);
-      setUserCampaigns(created);
-    } else if (user.userType === 'investor') {
-      const funded = getFundedCampaigns(user.id);
-      setUserCampaigns(funded);
+        // Get user-specific campaigns
+        if (user.userType === 'startup') {
+          const created = await campaignService.getCreatedCampaigns(user.id);
+          console.log(`Loaded ${created.length} created campaigns`);
+          setUserCampaigns(created);
+          // If user is a startup and has created campaigns, default to 'created' tab
+          if (created.length > 0) {
+            setActiveTab('created');
+          }
+        } else if (user.userType === 'investor') {
+          const funded = await campaignService.getFundedCampaigns(user.id);
+          console.log(`Loaded ${funded.length} funded campaigns`);
+          setUserCampaigns(funded);
+          // If user is an investor and has funded campaigns, default to 'funded' tab
+          if (funded.length > 0) {
+            setActiveTab('funded');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading campaigns for UserCampaignsSection:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const tabs = [
-    { id: 'viewed', label: 'Recently Viewed' },
-    { id: 'favorites', label: 'Favorites' },
-    { id: user?.userType === 'startup' ? 'created' : 'funded', 
-      label: user?.userType === 'startup' ? 'Your Campaigns' : 'Funded Campaigns' }
-  ];
+  // Dynamically determine which tabs to show based on user state
+  const getTabs = () => {
+    // Start with viewed tab that works for all users
+    const tabs = [
+      { id: 'viewed', label: 'Recently Viewed' }
+    ];
+    
+    // Add favorites tab for authenticated users
+    if (isAuthenticated()) {
+      tabs.push({ id: 'favorites', label: 'Favorites' });
+      
+      // Add user type specific tab
+      if (user?.userType === 'startup') {
+        tabs.push({ id: 'created', label: 'Your Campaigns' });
+      } else if (user?.userType === 'investor') {
+        tabs.push({ id: 'funded', label: 'Funded Campaigns' });
+      }
+    }
+    
+    return tabs;
+  };
 
   const getActiveCampaigns = () => {
     switch (activeTab) {
@@ -65,6 +96,9 @@ const UserCampaignsSection = () => {
         return [];
     }
   };
+
+  const tabs = getTabs();
+  const activeCampaigns = getActiveCampaigns();
 
   return (
     <section className="relative py-24">
@@ -83,12 +117,25 @@ const UserCampaignsSection = () => {
         {/* Section Header */}
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold text-white mb-4">
-            Your Campaign Journey
+            {isAuthenticated() 
+              ? "Your Campaign Journey" 
+              : "Recently Viewed Campaigns"}
           </h2>
           <p className="text-green-100 text-lg max-w-2xl mx-auto">
-            Track your interactions, favorites, and {user?.userType === 'startup' ? 'created' : 'funded'} campaigns
-            all in one place.
+            {isAuthenticated()
+              ? `Track your interactions, favorites, and ${user?.userType === 'startup' ? 'created' : 'funded'} campaigns all in one place.`
+              : "Campaigns you've viewed recently will appear here. Sign in to save your favorites."}
           </p>
+          
+          {/* Login prompt for unauthenticated users */}
+          {!isAuthenticated() && (
+            <button 
+              onClick={() => navigate('/login')}
+              className="mt-4 px-6 py-2 bg-white text-purple-600 rounded-full hover:bg-purple-50 transition-colors"
+            >
+              Sign in to track favorites
+            </button>
+          )}
         </div>
 
         {/* Tabs */}
@@ -111,9 +158,13 @@ const UserCampaignsSection = () => {
 
         {/* Campaign Grid */}
         <div className="mt-8">
-          {getActiveCampaigns().length > 0 ? (
+          {loading ? (
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-12 flex justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
+            </div>
+          ) : activeCampaigns.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {getActiveCampaigns().map((campaign) => (
+              {activeCampaigns.map((campaign) => (
                 <CampaignCard key={campaign.id} campaign={campaign} />
               ))}
             </div>
@@ -126,7 +177,17 @@ const UserCampaignsSection = () => {
                 {activeTab === 'funded' && 'You haven\'t funded any campaigns yet'}
               </p>
               <p className="text-green-100 mt-2">
-                Explore our campaigns to get started!
+                {activeTab === 'viewed' && 'Explore our campaigns to get started!'}
+                {activeTab === 'favorites' && 'Save campaigns you like to find them here'}
+                {activeTab === 'created' && (
+                  <button 
+                    onClick={() => navigate('/pages/CreateCampaign')}
+                    className="mt-4 px-6 py-2 bg-white text-purple-600 rounded-full hover:bg-purple-50 transition-colors"
+                  >
+                    Create your first campaign
+                  </button>
+                )}
+                {activeTab === 'funded' && 'Invest in campaigns you believe in'}
               </p>
             </div>
           )}
