@@ -841,124 +841,177 @@ export const campaignService = {
    * @param {Array} selectedMilestones - Selected milestones
    * @returns {Promise<Object>} - Contribution details
    */
-  contributeToCampaign: async (campaignId, amount, userId, selectedMilestones = []) => {
+  contributeToCampaign: async (campaignId, amount, userId, selectedMilestones) => {
     try {
       console.log(`Processing contribution of ${amount} to campaign ${campaignId} by user ${userId}`);
       
+      // Update campaign total
+      let campaignRef;
+      let campaignData;
+      
       try {
         // Try Firestore first
-        // 1. Update campaign amount
-        const campaignRef = doc(db, 'campaigns', campaignId);
+        campaignRef = doc(db, 'campaigns', campaignId);
         const campaignDoc = await getDoc(campaignRef);
         
         if (!campaignDoc.exists()) {
-          throw new Error('Campaign not found');
+          throw new Error('Campaign not found in Firestore');
         }
         
-        const campaignData = campaignDoc.data();
+        campaignData = campaignDoc.data();
         const newAmount = (campaignData.currentAmount || 0) + amount;
         
+        // Update campaign in Firestore
         await updateDoc(campaignRef, {
           currentAmount: newAmount,
           updatedAt: serverTimestamp()
         });
         
-        // 2. Record contribution in contributions collection
+        console.log(`Updated campaign amount in Firestore to ${newAmount}`);
+        
+        // Record contribution in contributions collection
         const contributionData = {
           campaignId,
           investorId: userId,
           amount,
-          milestones: selectedMilestones || [],
+          milestones: selectedMilestones ? 
+            selectedMilestones.map(m => ({ id: m.id, title: m.title, amount: m.amount })) : 
+            [],
           status: 'completed',
-          createdAt: serverTimestamp(),
-          paymentDetails: {
-            method: 'direct'
-          }
+          date: serverTimestamp()
         };
         
-        const contributionRef = await addDoc(collection(db, 'contributions'), contributionData);
-        console.log('Contribution added with ID:', contributionRef.id);
+        const contributionRef = await addDoc(
+          collection(db, 'contributions'), 
+          contributionData
+        );
         
-        // 3. Add to user's funded campaigns
-        const userRef = doc(db, 'users', userId);
-        const userDoc = await getDoc(userRef);
+        console.log('Contribution recorded in Firestore with ID:', contributionRef.id);
         
-        if (userDoc.exists()) {
-          await updateDoc(userRef, {
-            fundedCampaigns: arrayUnion({
-              campaignId,
-              amount,
-              date: serverTimestamp()
-            }),
-            updatedAt: serverTimestamp()
-          });
-        } else {
-          // Create user document if it doesn't exist
-          await setDoc(userRef, {
-            fundedCampaigns: [{
-              campaignId,
-              amount,
-              date: serverTimestamp()
-            }],
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
+        // Add to user's funded campaigns list if not already there
+        try {
+          const userRef = doc(db, 'users', userId);
+          const userDoc = await getDoc(userRef);
+          
+          if (userDoc.exists()) {
+            // Check if campaign is already in fundedCampaigns
+            const userData = userDoc.data();
+            const fundedCampaigns = userData.fundedCampaigns || [];
+            const alreadyFunded = fundedCampaigns.some(fc => fc.campaignId === campaignId);
+            
+            if (!alreadyFunded) {
+              // Add campaign to fundedCampaigns
+              await updateDoc(userRef, {
+                fundedCampaigns: arrayUnion({
+                  campaignId,
+                  amount,
+                  date: serverTimestamp()
+                })
+              });
+              console.log(`Added campaign ${campaignId} to user's funded campaigns`);
+            } else {
+              // Update amount for existing campaign
+              const updatedFundedCampaigns = fundedCampaigns.map(fc => {
+                if (fc.campaignId === campaignId) {
+                  return {
+                    ...fc,
+                    amount: (fc.amount || 0) + amount,
+                    lastContributionDate: serverTimestamp()
+                  };
+                }
+                return fc;
+              });
+              
+              await updateDoc(userRef, {
+                fundedCampaigns: updatedFundedCampaigns
+              });
+              console.log(`Updated funding amount for campaign ${campaignId} in user's funded campaigns`);
+            }
+          }
+        } catch (error) {
+          console.error("Error updating user's funded campaigns:", error);
+          // Continue execution - this is a non-critical operation
         }
         
         return {
-          id: contributionRef.id,
-          campaignId,
-          amount,
-          status: 'completed',
-          milestones: selectedMilestones
+          success: true,
+          message: 'Contribution processed successfully',
+          newTotal: newAmount
         };
       } catch (firestoreError) {
-        console.error('Failed to process contribution in Firestore:', firestoreError);
+        console.error('Failed to update in Firestore, falling back to localStorage:', firestoreError);
         
         // Fallback to localStorage
-        try {
-          // Update campaign amount in localStorage
-          const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
-          const updatedCampaigns = campaigns.map(campaign => {
-            if (campaign.id === campaignId) {
-              const currentAmount = Number(campaign.currentAmount || 0);
-              return {
-                ...campaign,
-                currentAmount: currentAmount + Number(amount),
-                updatedAt: new Date().toISOString()
-              };
-            }
-            return campaign;
-          });
-          
-          localStorage.setItem('campaigns', JSON.stringify(updatedCampaigns));
-          
-          // Save contribution to localStorage
-          const contributionId = `local-contrib-${Date.now()}`;
-          const contributions = JSON.parse(localStorage.getItem(`user_${userId}_contributions`) || '[]');
-          
-          const newContribution = {
-            id: contributionId,
+        const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+        const campaignIndex = campaigns.findIndex(c => c.id === campaignId);
+        
+        if (campaignIndex === -1) {
+          throw new Error('Campaign not found');
+        }
+        
+        // Update campaign amount
+        const updatedCampaign = {
+          ...campaigns[campaignIndex],
+          currentAmount: (campaigns[campaignIndex].currentAmount || 0) + amount,
+          updatedAt: new Date().toISOString()
+        };
+        
+        campaigns[campaignIndex] = updatedCampaign;
+        localStorage.setItem('campaigns', JSON.stringify(campaigns));
+        console.log(`Updated campaign amount in localStorage to ${updatedCampaign.currentAmount}`);
+        
+        // Record contribution in localStorage
+        const contributionData = {
+          id: `contrib-${Date.now()}`,
+          campaignId,
+          investorId: userId,
+          amount,
+          milestones: selectedMilestones ? 
+            selectedMilestones.map(m => ({ id: m.id, title: m.title, amount: m.amount })) : 
+            [],
+          status: 'completed',
+          date: new Date().toISOString()
+        };
+        
+        // Add to contributions array
+        const contributions = JSON.parse(localStorage.getItem('contributions') || '[]');
+        contributions.push(contributionData);
+        localStorage.setItem('contributions', JSON.stringify(contributions));
+        
+        // Add to user's funded campaigns
+        const userFundedKey = `user_${userId}_fundedCampaigns`;
+        const fundedCampaigns = JSON.parse(localStorage.getItem(userFundedKey) || '[]');
+        
+        // Check if campaign is already funded by this user
+        const existingIndex = fundedCampaigns.findIndex(fc => fc.campaignId === campaignId);
+        
+        if (existingIndex === -1) {
+          // Add new entry
+          fundedCampaigns.push({
             campaignId,
             amount,
-            milestones: selectedMilestones,
-            status: 'completed',
             date: new Date().toISOString()
+          });
+        } else {
+          // Update existing entry
+          fundedCampaigns[existingIndex] = {
+            ...fundedCampaigns[existingIndex],
+            amount: (fundedCampaigns[existingIndex].amount || 0) + amount,
+            lastContributionDate: new Date().toISOString()
           };
-          
-          contributions.push(newContribution);
-          localStorage.setItem(`user_${userId}_contributions`, JSON.stringify(contributions));
-          
-          console.log('Contribution processed in localStorage');
-          return newContribution;
-        } catch (localStorageError) {
-          console.error('Failed to process contribution in localStorage:', localStorageError);
-          throw new Error('Failed to process contribution');
         }
+        
+        localStorage.setItem(userFundedKey, JSON.stringify(fundedCampaigns));
+        
+        return {
+          success: true,
+          message: 'Contribution processed successfully',
+          newTotal: updatedCampaign.currentAmount
+        };
       }
     } catch (error) {
       console.error('Error processing contribution:', error);
-      throw error;
+      throw new Error(error.message || 'Failed to process contribution');
     }
   },
 

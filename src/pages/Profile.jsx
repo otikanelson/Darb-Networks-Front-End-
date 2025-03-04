@@ -21,7 +21,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, auth, storage } from '../firebase';
 
 const Profile = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, updateUserContext } = useAuth();
   const navigate = useNavigate();
   
   // Form state
@@ -162,6 +162,23 @@ const Profile = () => {
         photoURL: imageUrl
       });
       
+      // Update the AuthContext with the latest user data
+      if (updateUserContext) {
+        // Fetch the updated user data to ensure we have the latest
+        const updatedUserDoc = await getDoc(userRef);
+        if (updatedUserDoc.exists()) {
+          const updatedUserData = updatedUserDoc.data();
+          
+          // Update the Auth context with the new user data
+          updateUserContext({
+            ...user,
+            ...updatedUserData,
+            displayName: formData.fullName,
+            photoURL: imageUrl
+          });
+        }
+      }
+      
       setSuccessMessage('Profile updated successfully');
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -191,6 +208,14 @@ const Profile = () => {
           email: formData.email,
           updatedAt: new Date()
         });
+        
+        // Update the AuthContext
+        if (updateUserContext) {
+          updateUserContext({
+            ...user,
+            email: formData.email
+          });
+        }
         
         setSuccessMessage('Email updated successfully');
       }

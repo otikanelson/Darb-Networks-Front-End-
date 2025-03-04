@@ -1,11 +1,10 @@
 // src/pages/PaymentVerification.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Check, AlertTriangle, Home, Eye } from 'lucide-react';
+import { Check, AlertTriangle, Home, Eye, Download } from 'lucide-react';
 import DashboardNavbar from '../components/dashboard/DashboardNavbar';
 import Footer from '../components/layout/Footer';
-import { paymentService } from '../services/paymentService';
-import { campaignService } from '../services/campaignService';
+import { campaignService } from '../Services/CampaignService';
 
 const PaymentVerification = () => {
   const { paymentId } = useParams();
@@ -31,12 +30,21 @@ const PaymentVerification = () => {
       try {
         setLoading(true);
         
-        // Verify the payment
-        await paymentService.verifyPayment(paymentId, reference);
+        // In a real app, you would call your backend to verify with Paystack or another payment provider
+        // For this example, we'll get the payment data from localStorage
+        const paymentData = localStorage.getItem(`payment_${paymentId}`);
         
-        // Get payment details
-        const paymentDetails = await paymentService.getPaymentDetails(paymentId);
+        if (!paymentData) {
+          throw new Error('Payment not found');
+        }
+        
+        const paymentDetails = JSON.parse(paymentData);
         setPayment(paymentDetails);
+        
+        // Verify that the reference matches
+        if (paymentDetails.reference !== reference) {
+          throw new Error('Invalid payment reference');
+        }
         
         // Get campaign details
         if (paymentDetails.campaignId) {
@@ -44,17 +52,26 @@ const PaymentVerification = () => {
           setCampaign(campaignDetails);
         }
         
+        // Update payment status to indicate it's been verified
+        paymentDetails.verifiedAt = new Date().toISOString();
+        localStorage.setItem(`payment_${paymentId}`, JSON.stringify(paymentDetails));
+        
         setVerificationStatus('success');
       } catch (error) {
         console.error('Payment verification error:', error);
         setVerificationStatus('failed');
-        setError('Failed to verify payment. Please contact support.');
+        setError(error.message || 'Failed to verify payment. Please contact support.');
       } finally {
         setLoading(false);
       }
     };
     
-    verifyPayment();
+    // Add a small delay to simulate verification process
+    const timer = setTimeout(() => {
+      verifyPayment();
+    }, 1500);
+    
+    return () => clearTimeout(timer);
   }, [paymentId, reference]);
   
   // Format currency
@@ -65,6 +82,30 @@ const PaymentVerification = () => {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(value);
+  };
+  
+  // Generate a PDF receipt (simulated)
+  const downloadReceipt = () => {
+    // In a real app, you would generate a PDF receipt
+    // For this example, we'll just create a simple receipt text
+    const receiptText = `
+Receipt for Payment ${payment.reference}
+Date: ${new Date(payment.createdAt).toLocaleString()}
+Amount: ${formatCurrency(payment.amount)}
+Campaign: ${campaign?.title || 'Unknown Campaign'}
+Status: Paid
+
+Thank you for your contribution!
+    `;
+    
+    // Create a download link for the text
+    const element = document.createElement('a');
+    const file = new Blob([receiptText], {type: 'text/plain'});
+    element.href = URL.createObjectURL(file);
+    element.download = `receipt-${payment.reference}.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
   };
   
   return (
@@ -130,10 +171,17 @@ const PaymentVerification = () => {
                     </span>
                   </div>
                   
+                  <div className="flex justify-between mb-2">
+                    <span className="text-gray-600">Payment Method:</span>
+                    <span className="text-gray-900 font-medium">
+                      Card ending in {payment?.cardLast4 || '****'}
+                    </span>
+                  </div>
+                  
                   <div className="flex justify-between">
                     <span className="text-gray-600">Date:</span>
                     <span className="text-gray-900 font-medium">
-                      {payment ? new Date(payment.createdAt.toDate()).toLocaleString() : '-'}
+                      {payment ? new Date(payment.createdAt).toLocaleString() : '-'}
                     </span>
                   </div>
                 </div>
@@ -158,13 +206,21 @@ const PaymentVerification = () => {
                     A receipt has been sent to your email address.
                   </p>
                   
-                  <div className="flex flex-col sm:flex-row sm:justify-center gap-4">
+                  <div className="flex flex-col sm:flex-row justify-center gap-4">
                     <button
                       onClick={() => navigate('/dashboard')}
                       className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
                     >
                       <Home className="mr-2 h-5 w-5" />
                       Return to Dashboard
+                    </button>
+                    
+                    <button
+                      onClick={downloadReceipt}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                    >
+                      <Download className="mr-2 h-5 w-5" />
+                      Download Receipt
                     </button>
                     
                     {campaign && (
@@ -196,7 +252,7 @@ const PaymentVerification = () => {
                 </p>
                 
                 <div className="text-center mt-8">
-                  <div className="flex flex-col sm:flex-row sm:justify-center gap-4">
+                  <div className="flex flex-col sm:flex-row justify-center gap-4">
                     <button
                       onClick={() => navigate('/dashboard')}
                       className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700"

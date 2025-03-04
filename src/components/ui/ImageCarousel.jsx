@@ -1,5 +1,7 @@
+// src/components/ui/ImageCarousel.jsx - Updated with CustomVideoPlayer
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Play } from 'lucide-react';
+import CustomVideoPlayer from './CustomVideoPlayer'; // Import the new component
 
 const ImageCarousel = ({ pitchAsset = null, mainImages = [], milestoneImages = [] }) => {
   // Combine all images while keeping track of their source
@@ -67,12 +69,20 @@ const ImageCarousel = ({ pitchAsset = null, mainImages = [], milestoneImages = [
   }
 
   const nextMedia = () => {
+    if (isVideoPlaying) return; // Don't change media while video is playing
     setCurrentMediaIndex((prev) => (prev + 1) % allMedia.length);
-    setIsVideoPlaying(false);
   };
 
   const prevMedia = () => {
+    if (isVideoPlaying) return; // Don't change media while video is playing
     setCurrentMediaIndex((prev) => (prev - 1 + allMedia.length) % allMedia.length);
+  };
+
+  const handleVideoPlay = () => {
+    setIsVideoPlaying(true);
+  };
+
+  const handleVideoPause = () => {
     setIsVideoPlaying(false);
   };
 
@@ -89,17 +99,17 @@ const ImageCarousel = ({ pitchAsset = null, mainImages = [], milestoneImages = [
 
     if (currentMedia.type === 'video') {
       return (
-        <video
+        <CustomVideoPlayer
           src={currentMedia.preview}
-          controls
-          className="w-full h-full object-contain"
-          onPlay={() => setIsVideoPlaying(true)}
-          onPause={() => setIsVideoPlaying(false)}
+          posterImage={null} // You can add a poster image if you have one
+          className="w-full h-full"
+          onPlay={handleVideoPlay}
+          onPause={handleVideoPause}
         />
       );
     }
 
-    // Important: Make sure the image takes up the full space
+    // For images
     return (
       <div className="w-full h-full flex items-center justify-center">
         <img
@@ -116,62 +126,73 @@ const ImageCarousel = ({ pitchAsset = null, mainImages = [], milestoneImages = [
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-900">
+    <div className="h-full flex flex-col bg-gray-50">
       {/* Main Media Display */}
-      <div className="flex-1 bg-gray-800 rounded-lg relative overflow-hidden mb-4">
-        {/* Media Display - Make sure the content is visible */}
+      <div className="flex-1 rounded-lg relative overflow-hidden mb-4">
+        {/* Media Display */}
         <div className="absolute inset-0 flex items-center justify-center">
           {renderMediaDisplay()}
         </div>
 
-        {/* Navigation Arrows */}
-        {allMedia.length > 1 && (
+        {/* Navigation Arrows - Only show if video is not playing */}
+        {allMedia.length > 1 && !isVideoPlaying && (
           <>
             <button
               onClick={prevMedia}
               className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full 
-                        bg-green-800 text-white hover:bg-black/75 
+                        bg-black bg-opacity-50 text-white hover:bg-opacity-75 
                         transition-colors z-10"
             >
-              <ChevronLeft className="h-3 w-3" />
+              <ChevronLeft className="h-6 w-6" />
             </button>
             <button
               onClick={nextMedia}
               className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full 
-                        bg-green-800 text-white hover:bg-black/75 
+                        bg-black bg-opacity-50 text-white hover:bg-opacity-75 
                         transition-colors z-10"
             >
-              <ChevronRight className="h-3 w-3" />
+              <ChevronRight className="h-6 w-6" />
             </button>
           </>
         )}
 
-        {/* Media Counter */}
-        <div className="absolute bottom-4 right-4 px-2 
-                        bg-black/50 rounded-full text-white text-sm font-bold bg-green-800 z-10">
-          {currentMediaIndex + 1} / {allMedia.length}
-        </div>
+        {/* Media Counter - Only show if video is not playing */}
+        {!isVideoPlaying && (
+          <div className="absolute bottom-4 right-4 px-3 py-1 
+                          bg-black bg-opacity-50 rounded-full text-white text-sm font-medium z-10">
+            {currentMediaIndex + 1} / {allMedia.length}
+          </div>
+        )}
       </div>
 
       {/* Thumbnails */}
-      <div className="flex space-x-2 overflow-x-auto py-2 px-2 h-24 bg-gray-900">
+      <div className="flex space-x-2 overflow-x-auto py-2 px-2 h-24 bg-gray-200 rounded-lg">
         {allMedia.map((media, index) => (
           <button
             key={index}
             onClick={() => {
-              setCurrentMediaIndex(index);
-              setIsVideoPlaying(false);
+              if (!isVideoPlaying) {
+                setCurrentMediaIndex(index);
+              }
             }}
-            className={`relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden 
-                     ${currentMediaIndex === index ? 'ring-2 ring-green-500' : 'opacity-70 hover:opacity-100'}
-                     transition-all duration-200`}
+            className={`
+              relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden 
+              ${currentMediaIndex === index ? 'ring-2 ring-green-500' : 'opacity-70 hover:opacity-100'}
+              ${isVideoPlaying ? 'cursor-not-allowed' : 'cursor-pointer'}
+              transition-all duration-200
+            `}
           >
             {media.type === 'video' ? (
               <div className="relative w-full h-full">
-                <div className="absolute inset-0 bg-gray-800 flex items-center justify-center">
-                  <Play className="h-8 w-8 text-green-700" />
+                <img 
+                  src={media.preview} 
+                  alt="Video thumbnail"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+                  <Play className="h-8 w-8 text-white" />
                 </div>
-                <div className="absolute bottom-0 left-0 right-0 bg-black/50 py-1 px-2">
+                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 py-1 px-2">
                   <span className="text-white text-xs">Video</span>
                 </div>
               </div>
@@ -185,7 +206,7 @@ const ImageCarousel = ({ pitchAsset = null, mainImages = [], milestoneImages = [
                     e.target.src = '/placeholder-image.jpg';
                   }}
                 />
-                <div className="absolute bottom-0 left-0 right-0 bg-black/50 py-1 px-2">
+                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 py-1 px-2">
                   <span className="text-white text-xs">
                     {media.source === 'pitch' ? 'Pitch' : 
                      media.source === 'main' ? 'Main' : 'Milestone'}
