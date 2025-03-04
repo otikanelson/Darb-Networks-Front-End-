@@ -147,6 +147,20 @@ export const AuthProvider = ({ children }) => {
     return combinedData;
   };
 
+  // New function to update the user context data
+  const updateUserContext = async (updatedData) => {
+    console.log("Updating user context with:", updatedData);
+    
+    // Update the userDetails state with the new data
+    setUserDetails(prev => ({
+      ...prev,
+      ...updatedData
+    }));
+    
+    // Log updated data for debugging
+    console.log("User context updated. New userType:", updatedData.userType);
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center h-screen">
       <div className="animate-spin rounded-full h-12 w-12 border-4 border-green-500 border-t-transparent"></div>
@@ -159,7 +173,8 @@ export const AuthProvider = ({ children }) => {
       login, 
       logout, 
       register, 
-      isAuthenticated 
+      isAuthenticated,
+      updateUserContext
     }}>
       {children}
     </AuthContext.Provider>

@@ -89,6 +89,10 @@ const MyCampaigns = () => {
     }
   };
 
+  // Get if user is a founder
+  const isFounder = user?.userType?.toLowerCase() === 'startup';
+  const isInvestor = user?.userType?.toLowerCase() === 'investor';
+
   // Tab configuration - dynamic based on user type
   const getTabs = () => {
     const baseTabs = [
@@ -97,9 +101,11 @@ const MyCampaigns = () => {
     ];
     
     // Add conditional tabs based on user type
-    if (user?.userType?.toLowerCase() === 'startup') {
+    if (isFounder) {
       baseTabs.push({ id: 'created', label: 'My Campaigns', icon: PenLine });
-    } else if (user?.userType?.toLowerCase() === 'investor') {
+    } 
+    
+    if (isInvestor) {
       baseTabs.push({ id: 'funded', label: 'Funded Campaigns', icon: DollarSign });
     }
     
@@ -180,7 +186,7 @@ const MyCampaigns = () => {
           <h1 className="text-3xl font-bold text-gray-900">My Campaigns</h1>
           
           {/* Create Campaign Button (for startup users) */}
-          {user?.userType?.toLowerCase() === 'startup' && (
+          {isFounder && (
             <button
               onClick={() => navigate('/pages/CreateCampaign')}
               className="bg-green-700 hover:bg-green-700 text-white px-4 py-2 rounded-3xl flex items-center space-x-2"

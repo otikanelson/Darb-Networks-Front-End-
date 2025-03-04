@@ -57,6 +57,9 @@ const DashboardNavbar = () => {
     }
   };
 
+  // Check if user is a founder to show/hide certain features
+  const isFounder = user?.userType?.toLowerCase() === 'startup';
+
   return (
     <nav className="bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -110,15 +113,17 @@ const DashboardNavbar = () => {
           <div className="flex items-center">
             {isAuthenticated() ? (
               <>
-                {/* Create Campaign Button */}
-                <Link
-                  to="/pages/CreateCampaign"
-                  className="flex items-center mx-3 px-4 py-2 bg-green-700 text-white rounded-3xl 
-                           hover:bg-green-700 transition-colors text-sm font-medium"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  New Campaign
-                </Link>
+                {/* Create Campaign Button - Only show for Founders */}
+                {isFounder && (
+                  <Link
+                    to="/pages/CreateCampaign"
+                    className="flex items-center mx-3 px-4 py-2 bg-green-700 text-white rounded-3xl 
+                             hover:bg-green-700 transition-colors text-sm font-medium"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    New Campaign
+                  </Link>
+                )}
 
                 
                 {/* Profile Dropdown */}
@@ -146,6 +151,9 @@ const DashboardNavbar = () => {
                       <div className="px-4 py-3 border-b border-gray-100">
                         <p className="text-sm font-medium text-gray-900">{user?.displayName || user?.fullName}</p>
                         <p className="text-sm font-medium text-gray-500 truncate">{user?.email}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Type: {user?.userType === 'startup' ? 'Founder' : 'Investor'}
+                        </p>
                       </div>
                       <Link
                         to="/profile"
