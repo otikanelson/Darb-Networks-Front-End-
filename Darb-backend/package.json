@@ -1,0 +1,38 @@
+{
+    "name": "darb-backend",
+    "version": "1.0.0",
+    "description": "Backend for Darb crowdfunding platform",
+    "main": "src/app.js",
+    "scripts": {
+        "start": "node src/app.js",
+        "dev": "nodemon src/app.js",
+        "setup-db": "node src/setupDb.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "crowdfunding",
+        "p2p lending",
+        "nigeria"
+    ],
+    "author": "Your Name",
+    "license": "ISC",
+    "dependencies": {
+        "bcrypt": "^5.1.1",
+        "bootstrap": "^5.3.3",
+        "cors": "^2.8.5",
+        "date-fns": "^4.1.0",
+        "dotenv": "^16.4.7",
+        "express": "^4.21.2",
+        "helmet": "^8.1.0",
+        "jsonwebtoken": "^9.0.2",
+        "morgan": "^1.10.0",
+        "multer": "^1.4.5-lts.1",
+        "mysql2": "^3.14.0",
+        "react-bootstrap": "^2.10.9",
+        "sharp": "^0.33.5",
+        "uuid": "^11.1.0"
+    },
+    "devDependencies": {
+        "nodemon": "^2.0.22"
+    }
+}
